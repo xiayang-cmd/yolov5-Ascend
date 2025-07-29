@@ -1,0 +1,20 @@
+# Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
+#path: E:/项目数据集/train val 整理数据集/ir  # dataset root dir
+train: /data2/lt/aircraft_data/sar/train/images/ #images   # train images (relative to 'path')
+val:  /data2/lt/aircraft_data/sar/val/images/ #images  # val images (relative to 'path')
+
+
+# Classes
+nc: 13  # number of classes
+
+# names: ['Tower', 'F16', 'Mirage2000', 'PLZ_Radar', 'Hangar', 'Crater',
+#         'PAC3_Task_car', 'PAC3_missileCar', 'PAC3_ComVehicles',
+#         'PAC3_radar', 'Skyguard_Oerlikon_gun', 'Skyguard_radar',
+#         'Skyguard_launcher' , 'MainRunway', 'ViceRunway']             # ALL
+
+# names: ['Tower', 'F16', 'Mirage2000', 'PLZ_Radar', 'Hangar',
+#         'PAC3_Task_car', 'PAC3_missileCar', 'PAC3_ComVehicles',
+#         'PAC3_radar', 'Skyguard_Oerlikon_gun', 'Skyguard_radar',
+#         'Skyguard_launcher' , 'MainRunway', 'ViceRunway']             # No Ctater
+
+names: ['Flatbed_Truck','Cross_country_Vehicle','Stakebed_Truck','Building']                                            # No 'MainRunway', 'ViceRunway'
