@@ -85,8 +85,18 @@ def process_data(data):
         type_states.append(type_mapping.get(state_name, 0))  # 未映射类型设为0
 
         # 处理置信度
-        type_pres.append(round(entry["Target_Type_Pre"], 2))  # 保留2位小数
-        arr = [int(x) for x in entry["Target_Identification"].split(",")]
+        pre_str = entry["Target_Type_Pre"]
+        try:
+            pre = float(pre_str)
+        except Exception:
+            pre = 0.0
+            print(f"pre convert error: {entry}")
+        type_pres.append(round(pre, 2))  # 保留2位小数
+        try:
+            arr = [int(x) for x in entry["Target_Identification"].split(",")]
+        except Exception:
+            arr = [0, 0, 0, 0]
+            print(f"pre convert error: {entry}")
         boxes.extend(arr)
 
     # 4. 处理评估时间
