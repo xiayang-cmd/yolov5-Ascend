@@ -51,7 +51,57 @@ from utils.plots import Annotator, colors, save_one_box
 from utils.torch_utils import select_device, smart_inference_mode
 from utils.torch_utils import time_sync                                             # ----- 添加
 
+# 类型映射关系
+type_mapping = {
+    "Stakebed_Truck": 4,
+    "Flatbed_Truck": 2,
+    "Cross_country_Vehicle": 1,
+    "Building": 3
+}
 
+# 处理数据
+def process_data(data):
+    # 检查数据合法性
+    if not data:
+        return None
+
+    # 1. 转换时间戳 (使用第一个条目的时间)
+    time_str = data[0]["time"]
+    dt = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S.%f")
+    timestamp = int(dt.timestamp() * 1000)
+
+    # 2. 初始化目标列表
+    target_ids = []
+    type_states = []
+    type_pres = []
+    boxes = []
+
+    # 3. 提取每个目标的信息
+    for entry in data:
+        target_ids.append(entry["Target_ID"])
+
+        # 处理目标类型映射
+        state_name = entry["Target_Type_state"]
+        type_states.append(type_mapping.get(state_name, 0))  # 未映射类型设为0
+
+        # 处理置信度
+        type_pres.append(round(entry["Target_Type_Pre"], 2))  # 保留2位小数
+        arr = [int(x) for x in entry["Target_Identification"].split(",")]
+        boxes.extend(arr)
+
+    # 4. 处理评估时间
+    time_str = data[0]["Recognition_Time"].replace("ms", "")
+    evaluate_time = float(time_str)
+
+    # 5. 创建新数据结构
+    return {
+        "time": timestamp,
+        "Target_Num": len(data),
+        "Target_ID": target_ids,
+        "Target_Type_State": type_states,
+        "Target_Type_Pre": type_pres,
+        "Target_Identification_box": boxes
+    }
 
 @smart_inference_mode()
 def run(
@@ -209,6 +259,9 @@ def run(
                     target_pres.append(f"{conf.item():.4f}")
                     xyxy_str = ','.join(map(str, [int(x.item()) for x in xyxy]))
                     target_identifications.append(xyxy_str)  # 直接添加字符串
+                    c = int(cls)
+                    label = None if hide_labels else (f'{target_type}' if hide_conf else f'{target_type} {conf:.2f}')
+                    annotator.box_label(xyxy, label, color=colors(c, True))
 
 
             # 生成当前帧的JSON数据
@@ -245,6 +298,10 @@ def run(
             # 将当前帧的检测信息写入对应的JSON文件
             with open(frame_json_file_path, 'w', encoding='utf-8') as f:
                 json.dump(frame_detections, f, ensure_ascii=False, indent=4, separators=(',', ': '))
+                result_json = process_data(frame_detections)
+                json_str = json.dumps(result_json)
+                print(f"result:{json_str}")
+
 
 
             # Stream results
@@ -312,55 +369,3 @@ def main(opt):
 if __name__ == '__main__':
     opt = parse_opt()
     main(opt)
-
-# 类型映射关系
-type_mapping = {
-    "Stakebed_Truck": 4,
-    "Flatbed_Truck": 2,
-    "Cross_country_Vehicle": 1,
-    "Building": 3
-}
-
-# 处理数据
-def process_data(data):
-    # 检查数据合法性
-    if not data:
-        return None
-
-    # 1. 转换时间戳 (使用第一个条目的时间)
-    time_str = data[0]["time"]
-    dt = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S.%f")
-    timestamp = int(dt.timestamp() * 1000)
-
-    # 2. 初始化目标列表
-    target_ids = []
-    type_states = []
-    type_pres = []
-    boxes = []
-
-    # 3. 提取每个目标的信息
-    for entry in data:
-        target_ids.append(entry["Target_ID"])
-
-        # 处理目标类型映射
-        state_name = entry["Target_Type_state"]
-        type_states.append(type_mapping.get(state_name, 0))  # 未映射类型设为0
-
-        # 处理置信度
-        type_pres.append(round(entry["Target_Type_Pre"], 2))  # 保留2位小数
-        arr = [int(x) for x in entry["Target_Identification"].split(",")]
-        boxes.extend(arr)
-
-    # 4. 处理评估时间
-    time_str = data[0]["Recognition_Time"].replace("ms", "")
-    evaluate_time = float(time_str)
-
-    # 5. 创建新数据结构
-    return {
-        "time": timestamp,
-        "Target_Num": len(data),
-        "Target_ID": target_ids,
-        "Target_Type_State": type_states,
-        "Target_Type_Pre": type_pres,
-        "Target_Identification_box": boxes
-    }
