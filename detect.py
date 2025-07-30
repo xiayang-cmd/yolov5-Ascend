@@ -217,10 +217,13 @@ def run(
                 im0_infer = im0s[0] if isinstance(im0s, list) else im0s.copy()
                 dets, _, _, _ = predictor.infer(im0_infer, conf_thres, iou_thres)
             t3 = time_sync()
+            # utils/detect.py, Ascend 分支
             if dets:
-                pred = [torch.tensor([[*b, sc, cid] for b, sc, cid in dets])]
+                pred = [torch.tensor([[*b, sc, cid]           # ← 原来
+                                     for b, sc, cid in dets],
+                                     dtype=torch.float32)]    # ← 新增 dtype
             else:
-                pred = [torch.empty((0, 6))]
+                pred = [torch.empty((0, 6), dtype=torch.float32)]
             t4 = time_sync()
         else:
             with dt[0]:
@@ -390,6 +393,10 @@ def parse_opt():
     parser.add_argument('--speed', default=True, action='store_true', help='adjust detect speed')
 
     opt = parser.parse_args()
+
+    if isinstance(opt.weights, (list, tuple)):
+        opt.weights = opt.weights[0]
+
     opt.imgsz *= 2 if len(opt.imgsz) == 1 else 1  # expand
     print_args(vars(opt))
     return opt
