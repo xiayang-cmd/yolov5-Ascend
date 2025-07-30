@@ -356,7 +356,7 @@ def run(
                     # cv2.moveWindow("detect result", 0, 0)
                 cv2.imshow(show_name, im0)  
                 if speed == True:                                                                      # -------改名
-                    cv2.waitKey(60)  # 1 millisecond
+                    cv2.waitKey(1)  # 1 millisecond
                 elif speed == False :
                     cv2.waitKey(1)
 
