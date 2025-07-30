@@ -196,8 +196,9 @@ def run(
     cv2.namedWindow(show_name, 0)  # allow window resize (Linux)                                                  # -----增加
     # cv2.resizeWindow(show_name, int(1920 * 5 / 10), int(1080 * 5 / 10))
     # cv2.moveWindow(show_name, int(1920 * 5 / 10), 0)
-    cv2.resizeWindow(show_name, int(2560), int(1440))
-
+    # cv2.resizeWindow(show_name, int(2560), int(1440))
+    cv2.resizeWindow(show_name, int(1920), int(1080))
+    
     all_detection_info = []
 
     # 初始化JSON文件路径和首帧标记
@@ -284,7 +285,11 @@ def run(
 
             if len(det):
                 # Rescale boxes from img_size to im0 size
-                det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], im0.shape).round()
+                # det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], im0.shape).round()
+                if not use_ascend:
+                    det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], im0.shape).round()
+                else:
+                    det[:, :4] = det[:, :4].round()
                 target_id_counter = 1  # 新增：用于记录目标的ID
                 for *xyxy, conf, cls in reversed(det):
                     target_type = names[int(cls)]
