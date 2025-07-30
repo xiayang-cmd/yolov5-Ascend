@@ -92,5 +92,15 @@ class AscendPredictor:
         blob, r, dw, dh = preprocess(img)
         outputs = safe_infer(self.session, blob, mode="static")
         dets = postprocess(outputs, conf_thres, iou_thres)
-        return dets, r, dw, dh
 
+        # —— 反向去掉 letterbox 的缩放与填充，直接得到原图坐标 ——
+        dets_scaled = []
+        for box, score, cid in dets:
+            x1, y1, x2, y2 = box
+            x1 = (x1 - dw) / r
+            y1 = (y1 - dh) / r
+            x2 = (x2 - dw) / r
+            y2 = (y2 - dh) / r
+            dets_scaled.append(((x1, y1, x2, y2), score, cid))
+
+        return dets_scaled, r, dw, dh
