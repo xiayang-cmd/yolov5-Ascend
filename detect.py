@@ -160,12 +160,26 @@ def run(
     (save_dir / 'labels' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
 
     # Load model
-    device = select_device(device)
-    model = DetectMultiBackend(weights, device=device, dnn=dnn, data=data, fp16=half)
-    stride, names, pt = model.stride, model.names, model.pt
-    imgsz = check_img_size(imgsz, s=stride)  # check image size
-
-    # Dataloader
+    use_ascend = str(device).lower().startswith('ascend')
+    if use_ascend:
+        from utils.general import yaml_load
+        from utils.ascend_utils import AscendPredictor
+        device_id = 0
+        if isinstance(device, str) and ':' in device:
+            try:
+                device_id = int(device.split(':')[1])
+            except ValueError:
+                device_id = 0
+        predictor = AscendPredictor(weights, device_id=device_id)
+        stride, names = 32, yaml_load(data).get('names', [])
+        pt = True
+        imgsz = check_img_size(imgsz, s=stride)
+    else:
+        device = select_device(device)
+        model = DetectMultiBackend(weights, device=device, dnn=dnn, data=data, fp16=half)
+        stride, names, pt = model.stride, model.names, model.pt
+        imgsz = check_img_size(imgsz, s=stride)
+# Dataloader
     bs = 1  # batch_size
     if webcam:
         view_img = check_imshow(warn=True)
@@ -193,29 +207,39 @@ def run(
 
 
     # Run inference
-    model.warmup(imgsz=(1 if pt or model.triton else bs, 3, *imgsz))  # warmup
+    if not use_ascend:
+        model.warmup(imgsz=(1 if pt or model.triton else bs, 3, *imgsz))  # warmup
     seen, windows, dt = 0, [], (Profile(), Profile(), Profile())
     for path, im, im0s, vid_cap, s in dataset:
-        t1 = time_sync()                                                                        # ----添加时间
-        with dt[0]:
-            print(im.shape)
-            im = torch.from_numpy(im).to(model.device)
-            im = im.half() if model.fp16 else im.float()  # uint8 to fp16/32
-            im /= 255  # 0 - 255 to 0.0 - 1.0
-            if len(im.shape) == 3:
-                im = im[None]  # expand for batch dim
-        t2 = time_sync()                                                                        # ----添加时间
+        t1 = time_sync()
+        if use_ascend:
+            with dt[1]:
+                im0_infer = im0s[0] if isinstance(im0s, list) else im0s.copy()
+                dets, _, _, _ = predictor.infer(im0_infer, conf_thres, iou_thres)
+            t3 = time_sync()
+            if dets:
+                pred = [torch.tensor([[*b, sc, cid] for b, sc, cid in dets])]
+            else:
+                pred = [torch.empty((0, 6))]
+            t4 = time_sync()
+        else:
+            with dt[0]:
+                print(im.shape)
+                im = torch.from_numpy(im).to(model.device)
+                im = im.half() if model.fp16 else im.float()
+                im /= 255
+                if len(im.shape) == 3:
+                    im = im[None]
+            t2 = time_sync()
 
-        # Inference
-        with dt[1]:
-            visualize = increment_path(save_dir / Path(path).stem, mkdir=True) if visualize else False
-            pred = model(im, augment=augment, visualize=visualize)
-        t3 = time_sync()                                                                        # ----添加时间
+            with dt[1]:
+                visualize = increment_path(save_dir / Path(path).stem, mkdir=True) if visualize else False
+                pred = model(im, augment=augment, visualize=visualize)
+            t3 = time_sync()
 
-        # NMS
-        with dt[2]:
-            pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
-        t4 = time_sync()                                                                        # ----添加时间
+            with dt[2]:
+                pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
+            t4 = time_sync()
 
         # Second-stage classifier (optional)
         # pred = utils.general.apply_classifier(pred, classifier_model, im, im0s)
@@ -336,14 +360,14 @@ def run(
 
 def parse_opt():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--weights', nargs='+', type=str, default=r'D:\yanjiusheng\zzzz\hangtain\5.9\5.9\uav_Ir_LV_noRunway\yolov5\runs\train\exp3\weights\last.pt', help='model path or triton URL')
+    parser.add_argument('--weights', nargs='+', type=str, default='model.om', help='model path (.pt or .om)')
     parser.add_argument('--source', type=str, default= r'D:\yanjiusheng\zzzz\hangtain\5.9\5.9\uav_Ir_LV_noRunway\yolov5\data\images\1\uav_ir_crop.mp4', help='file/dir/URL/glob/screen/0(webcam)')
     parser.add_argument('--data', type=str, default=ROOT / 'data/hangpai.yaml', help='(optional) dataset.yaml path')
     parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=int, default=[960], help='inference size h,w')
     parser.add_argument('--conf-thres', type=float, default=0.25, help='confidence threshold')
     parser.add_argument('--iou-thres', type=float, default=0.25, help='NMS IoU threshold')
     parser.add_argument('--max-det', type=int, default=300, help='maximum detections per image')
-    parser.add_argument('--device', default='0', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
+    parser.add_argument('--device', default='cpu', help='cuda device, i.e. 0 or 0,1,2,3, cpu or Ascend')
     parser.add_argument('--view-img', action='store_true', help='show results')
     parser.add_argument('--save-txt', action='store_true', help='save results to *.txt')
     parser.add_argument('--save-conf', action='store_true', help='save confidences in --save-txt labels')
